@@ -1,10 +1,17 @@
 *.sh text eol=lf
+# cmd.exe mis-parses labels and blocks in LF-only batch files.
+*.bat text eol=crlf
+*.cmd text eol=crlf
 
 # Force LF on Go source + JSON golden fixtures so Windows checkouts
 # (with default core.autocrlf=true) don't trip byte-equal comparisons in
 # acceptance/contract envelope tests.
 *.go text eol=lf
 cli/acceptance/testdata/**/*.json text eol=lf
+
+# check-license-bundle.sh reads this with bash `read`, which keeps a trailing
+# CR and then rejects the checksum on Windows checkouts.
+licenses/sources/modules.tsv text eol=lf
 
 # Trellis: append-only developer journals should merge cleanly across
 # parallel sessions/worktrees — each session only appends a new block, so

@@ -502,6 +502,13 @@ func Fatalf(c context.Context, format string, args ...interface{}) {
 	addCaller(GetLogger(c), 2).Fatalf(format, args...)
 }
 
+// SetExitFunc 替换 Fatal / Fatalf 结束进程的方式（默认 os.Exit），需在启动早期调用
+func SetExitFunc(exit func(code int)) {
+	loggerMu.Lock()
+	defer loggerMu.Unlock()
+	appLogger.ExitFunc = exit
+}
+
 // CloneContext 复制上下文中的关键信息到新上下文
 //
 // Which keys survive is decided by types.contextCloneAcrossDetach, which lives

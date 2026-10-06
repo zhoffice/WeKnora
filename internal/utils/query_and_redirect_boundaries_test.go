@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	pg_query "github.com/pganalyze/pg_query_go/v6"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +37,7 @@ func TestSQLPredicatesCannotBecomeQuotedText(t *testing.T) {
 		secured, validation, err := ValidateAndSecureSQL(query, WithSecurityDefaults(7),
 			WithSoftDeleteFilter(), WithSearchScopeFilter([]string{"kb-1"}, nil))
 		require.NoError(t, err, "%+v", validation.Errors)
-		parsed, err := pg_query.Parse(secured)
+		parsed, err := pgParse(secured)
 		require.NoError(t, err)
 		require.NotNil(t, parsed.Stmts[0].Stmt.GetSelectStmt().WhereClause, secured)
 		require.Contains(t, secured, "tenant_id = 7")

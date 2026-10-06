@@ -2,27 +2,21 @@ package sqlite
 
 import (
 	"context"
-	"fmt"
 	"strings"
-	"sync"
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/types"
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	gormsqlite "gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
-var registerSQLiteVec sync.Once
-
 func newSQLiteRetrieverTestRepository(t *testing.T) *sqliteRepository {
 	t.Helper()
-	registerSQLiteVec.Do(sqlite_vec.Auto)
 
+	// openSQLiteTestDialector lives in testdb_cgo_test.go / testdb_purego_test.go.
 	dbName := strings.NewReplacer("/", "_", " ", "_").Replace(t.Name())
-	db, err := gorm.Open(gormsqlite.Open(fmt.Sprintf("file:%s?mode=memory&cache=shared", dbName)), &gorm.Config{})
+	db, err := gorm.Open(openSQLiteTestDialector(dbName), &gorm.Config{})
 	require.NoError(t, err)
 
 	sqlDB, err := db.DB()

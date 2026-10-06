@@ -41,6 +41,10 @@ import (
 )
 
 func main() {
+	// Windows bundle builds: run from the exe folder, load .env, start services/.
+	bundleDir := enterBundleMode()
+	defer pauseOnPanic()
+
 	// Set Gin mode
 	if os.Getenv("GIN_MODE") == "release" {
 		gin.SetMode(gin.ReleaseMode)
@@ -54,6 +58,11 @@ func main() {
 	// config landed even when DB / storage init fails.
 	runtime.LogStartupEnv(context.Background())
 	runtime.MarkServerStarted()
+
+	// Qdrant must be listening before the container connects to it.
+	if bundleDir != "" {
+		startBundledServices(bundleDir)
+	}
 
 	// Build dependency injection container
 	c := container.BuildContainer(runtime.GetContainer())

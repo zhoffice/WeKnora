@@ -20,8 +20,6 @@ import (
 
 	modelruntime "github.com/Tencent/WeKnora/internal/models/runtime"
 
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
-	_ "github.com/duckdb/duckdb-go/v2"
 	esv7 "github.com/elastic/go-elasticsearch/v7"
 	"github.com/elastic/go-elasticsearch/v8"
 	_ "github.com/go-sql-driver/mysql" // 给 Doris (database/sql) 注册 MySQL 协议驱动
@@ -33,7 +31,6 @@ import (
 	"go.uber.org/dig"
 	"google.golang.org/grpc"
 	"gorm.io/driver/postgres"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
 	"github.com/Tencent/WeKnora/internal/agent/approval"
@@ -83,6 +80,7 @@ import (
 	"github.com/Tencent/WeKnora/internal/im/wecom"
 	"github.com/Tencent/WeKnora/internal/im/yunzhijia"
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
+	_ "github.com/Tencent/WeKnora/internal/infrastructure/duckdb" // registers the "duckdb" database/sql driver
 	infra_web_search "github.com/Tencent/WeKnora/internal/infrastructure/web_search"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/mcp"
@@ -852,9 +850,8 @@ func initDatabase(cfg *config.Config) (*gorm.DB, error) {
 				return nil, fmt.Errorf("failed to create SQLite data directory %s: %w", dir, err)
 			}
 		}
-		sqlite_vec.Auto()
-		dsn := dbPath + "?_journal_mode=WAL&_busy_timeout=5000&_foreign_keys=on"
-		dialector = sqlite.Open(dsn)
+		// sqlite_cgo.go (mattn + sqlite-vec) or sqlite_purego.go (modernc)
+		dialector = openSQLiteDialector(dbPath)
 		sqliteDBPath = dbPath
 		migrateDSN = "sqlite3://" + dbPath
 		logger.Infof(context.Background(), "DB Config: driver=sqlite path=%s", dbPath)

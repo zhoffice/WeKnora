@@ -12,8 +12,7 @@ import (
 	"sync"
 	"testing"
 
-	_ "github.com/duckdb/duckdb-go/v2"
-
+	_ "github.com/Tencent/WeKnora/internal/infrastructure/duckdb" // duckdb-go (cgo) or duckdb.dll (pure-Go Windows)
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )

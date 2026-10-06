@@ -12,7 +12,6 @@ import (
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
-	sqlite_vec "github.com/asg017/sqlite-vec-go-bindings/cgo"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -44,7 +43,7 @@ type sqliteRepository struct {
 }
 
 func NewSQLiteRetrieveEngineRepository(db *gorm.DB) interfaces.RetrieveEngineRepository {
-	logger.GetLogger(context.Background()).Info("[SQLite] Initializing SQLite retriever engine repository with sqlite-vec")
+	logger.GetLogger(context.Background()).Infof("[SQLite] Initializing SQLite retriever engine repository (vector backend: %s)", vecBackend)
 
 	if err := db.AutoMigrate(&sqliteEmbedding{}); err != nil {
 		logger.GetLogger(context.Background()).Errorf("[SQLite] Failed to auto-migrate lite_embeddings: %v", err)
@@ -148,11 +147,11 @@ func (r *sqliteRepository) ensureVecTable(dim int) {
 		return
 	}
 	tbl := vecTableName(dim)
-	createSQL := fmt.Sprintf(
-		`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(embedding float[%d] distance_metric=cosine)`,
-		tbl, dim,
-	)
-	if err := r.db.Exec(createSQL).Error; err != nil {
+	if err := checkVecTable(r.db, tbl); err != nil {
+		logger.GetLogger(context.Background()).Errorf("[SQLite] %v", err)
+		return
+	}
+	if err := r.db.Exec(vecTableDDL(tbl, dim)).Error; err != nil {
 		if strings.Contains(err.Error(), "already exists") {
 			r.markVecTable(dim)
 			return
@@ -476,33 +475,11 @@ func (r *sqliteRepository) vectorRetrieve(ctx context.Context, params types.Retr
 	dim := len(params.Embedding)
 	r.ensureVecTable(dim)
 
-	queryBlob, err := sqlite_vec.SerializeFloat32(params.Embedding)
-	if err != nil {
-		return nil, fmt.Errorf("serialize query vector failed: %w", err)
-	}
+	queryBlob := serializeFloat32(params.Embedding)
 
-	tbl := vecTableName(dim)
-
-	// ⚠️ sqlite-vec 要求必须有 k = ?
-	vecSQL := fmt.Sprintf(`
-		SELECT v.rowid, v.distance,
-			e.source_id, e.source_type, e.chunk_id,
-			e.knowledge_id, e.knowledge_base_id,
-			e.tag_id, e.content
-		FROM %s v
-		JOIN lite_embeddings e ON e.id = v.rowid
-		WHERE v.embedding MATCH ?
-		AND k = ?
-		AND v.rowid IN (
-			SELECT filtered.id
-			FROM lite_embeddings filtered
-			WHERE (filtered.is_enabled IS NULL OR filtered.is_enabled = 1)
-	`, tbl)
-
-	args := []interface{}{
-		queryBlob,
-		params.TopK, // 这里就是 k
-	}
+	// The KNN head/tail differ between sqlite-vec (cgo) and the pure-Go
+	// table scan; see vec_cgo.go / vec_purego.go.
+	vecSQL, args, tail, tailArgs := knnQuery(vecTableName(dim), queryBlob, params.TopK)
 
 	// 追加过滤条件
 	for _, wp := range buildFilterWhere(params, "filtered") {
@@ -510,8 +487,8 @@ func (r *sqliteRepository) vectorRetrieve(ctx context.Context, params types.Retr
 		args = append(args, wp.args...)
 	}
 
-	// ⚠️ 这里仍然建议加 ORDER BY，虽然 vec0 已经按距离返回
-	vecSQL += ") ORDER BY v.distance ASC"
+	vecSQL += tail
+	args = append(args, tailArgs...)
 
 	type row struct {
 		Rowid           uint
@@ -598,10 +575,7 @@ func extractEmbedding(params map[string]any, sourceID string) []float32 {
 // insertVec writes a row's vector through db. The vec0 table for dim must
 // already exist (ensureVecTable), since db may be a transaction.
 func (r *sqliteRepository) insertVec(db *gorm.DB, rowID uint, dim int, emb []float32) {
-	blob, err := sqlite_vec.SerializeFloat32(emb)
-	if err != nil {
-		return
-	}
+	blob := serializeFloat32(emb)
 	sql := fmt.Sprintf("INSERT INTO %s(rowid, embedding) VALUES (?, ?)", vecTableName(dim))
 	db.Exec(sql, rowID, blob)
 }

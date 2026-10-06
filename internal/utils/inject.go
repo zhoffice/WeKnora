@@ -170,7 +170,7 @@ func ParseSQL(sql string) *SQLParseResult {
 	}
 
 	// Parse the SQL using pg_query_go
-	parseResult, err := pg_query.Parse(sql)
+	parseResult, err := pgParse(sql)
 	if err != nil {
 		result.IsSelect = false
 		result.ParseError = fmt.Sprintf("Failed to parse SQL: %v", err)
@@ -728,7 +728,7 @@ func ValidateSQL(sql string, opts ...SQLValidationOption) (*SQLParseResult, *SQL
 	}
 
 	// Phase 2: Parse SQL using PostgreSQL's official parser
-	parseResult, err := pg_query.Parse(sql)
+	parseResult, err := pgParse(sql)
 	if err != nil {
 		validationResult.Valid = false
 		validationResult.Errors = append(validationResult.Errors, SQLValidationError{
@@ -918,7 +918,7 @@ func ValidateAndSecureSQL(sql string, opts ...SQLValidationOption) (string, *SQL
 	}
 
 	// Parse again to get normalized SQL
-	result, err := pg_query.Parse(sql)
+	result, err := pgParse(sql)
 	if err != nil {
 		return "", validationResult, fmt.Errorf("failed to parse SQL: %v", err)
 	}
@@ -945,7 +945,7 @@ func ValidateAndSecureSQL(sql string, opts ...SQLValidationOption) (string, *SQL
 				fragment = validator.injectHiddenKBFilter(fragment, tables)
 				fragment = validator.injectChunkEnabledFilter(fragment, tables)
 				fragment = validator.injectSearchScopeConditions(fragment, tables)
-				filters, err := pg_query.Parse(fragment)
+				filters, err := pgParse(fragment)
 				if err != nil {
 					return fmt.Errorf("failed to build SQL security filter: %w", err)
 				}
@@ -969,7 +969,7 @@ func ValidateAndSecureSQL(sql string, opts ...SQLValidationOption) (string, *SQL
 	if err != nil {
 		return "", validationResult, err
 	}
-	securedSQL, err := pg_query.Deparse(result)
+	securedSQL, err := pgDeparse(result)
 	if err != nil {
 		return "", validationResult, fmt.Errorf("failed to deparse secured SQL: %w", err)
 	}
@@ -1025,7 +1025,7 @@ func InjectAndConditions(sql, filter string) string {
 	if strings.TrimSpace(filter) == "" {
 		return sql
 	}
-	parsed, err := pg_query.Parse(sql)
+	parsed, err := pgParse(sql)
 	if err != nil || len(parsed.Stmts) != 1 {
 		return ""
 	}
@@ -1033,7 +1033,7 @@ func InjectAndConditions(sql, filter string) string {
 	if stmt == nil || stmt.Op != pg_query.SetOperation_SETOP_NONE {
 		return ""
 	}
-	filters, err := pg_query.Parse("SELECT 1 WHERE " + filter)
+	filters, err := pgParse("SELECT 1 WHERE " + filter)
 	if err != nil || len(filters.Stmts) != 1 {
 		return ""
 	}
@@ -1042,7 +1042,7 @@ func InjectAndConditions(sql, filter string) string {
 		return ""
 	}
 	addSQLPredicate(stmt, predicate.WhereClause)
-	out, err := pg_query.Deparse(parsed)
+	out, err := pgDeparse(parsed)
 	if err != nil {
 		return ""
 	}
